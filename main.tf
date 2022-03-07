@@ -16,9 +16,7 @@ provider "azurerm" {
   tenant_id = var.tenant_id
 }
 
-data "template_file" "nginx-vm-cloud-init" {
-  template = file("install-nginx.sh")
-}
+
 
 resource "azurerm_resource_group" "example" {
   name     = var.resource_group_name
@@ -64,7 +62,7 @@ resource "azurerm_storage_management_policy" "example" {
 
 resource "azurerm_virtual_network" "example" {
   name                = "ollin-vnet"
-  address_space       = ["10.0.0.0/16"]
+  address_space       = ["10.10.0.0/16"]
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
 }
@@ -73,7 +71,7 @@ resource "azurerm_subnet" "example" {
   name                 = "ollin-example"
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.example.name
-  address_prefixes     = ["10.0.2.0/24"]
+  address_prefixes     = ["10.10.1.0/24"]
 }
 
 resource "azurerm_public_ip" "pip" {
@@ -96,70 +94,73 @@ resource "azurerm_network_interface" "example" {
   }
 }
 
-resource "azurerm_network_security_group" "webserver" {
-  name                = "tls_webserver"
+resource "azurerm_network_security_group" "linux-vm-nsg" {
+    depends_on = [
+      azurerm_resource_group.example
+    ]
+  name                = "ollin_linux-vm-nsg"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
+  
   security_rule {
-    access                     = "Allow"
-    direction                  = "Inbound"
-    name                       = "tls"
+    name                       = "AllowHTTP"
+    description                = "Allow HTTP"
     priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    source_address_prefix      = "*"
-    destination_port_range     = "443"
-    destination_address_prefix = azurerm_network_interface.example.private_ip_address
-  }
-  security_rule {
-    name = "Allow-SSH"
-    description = "Allow SSH"
-    priority = 110
-    direction = "Inbound"
-    access = "Allow"
-    protocol = "Tcp"
-    source_port_range = "*"
-    destination_port_range = "22"
-    source_address_prefix = "Internet"
+    destination_port_range     = "80"
+    source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
+
   security_rule {
-    name = "Allow-HTTP"
-    description = "Allow HTTP"
-    priority = 120
-    direction = "Inbound"
-    access = "Allow"
-    protocol = "Tcp"
-    source_port_range = "*"
-    destination_port_range = "80"
-    source_address_prefix = "Internet"
+    name                       = "AllowSSH"
+    description                = "Allow SSH"
+    priority                   = 150
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
 }
 
 resource "azurerm_network_interface_security_group_association" "example" {
+    depends_on = [
+      azurerm_resource_group.example
+    ]
   network_interface_id      = azurerm_network_interface.example.id
-  network_security_group_id = azurerm_network_security_group.webserver.id
+  network_security_group_id = azurerm_network_security_group.linux-vm-nsg.id
 }
 
 
 
 resource "azurerm_linux_virtual_machine" "example" {
+depends_on = [
+  azurerm_network_interface.example
+]
+
   name                            = "${var.prefix}-vm"
   resource_group_name             = azurerm_resource_group.example.name
   location                        = azurerm_resource_group.example.location
-  size                            = "Standard_F2"
+  size                            = "Standard_D2_v2"
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
   disable_password_authentication = false
   network_interface_ids = [azurerm_network_interface.example.id]
-  custom_data = base64encode(data.template_file.nginx-vm-cloud-init.rendered)
-
+  custom_data    = base64encode(data.template_file.nginx-vm-cloud-init.rendered)
 
   source_image_reference {
-    publisher = "Debian"
-    offer     = "debian-11"
-    sku       = "11"
+    publisher = "Canonical"
+
+    offer     = "UbuntuServer"
+
+    sku       = "16.04-LTS"
+
     version   = "latest"
   }
 
@@ -168,3 +169,7 @@ resource "azurerm_linux_virtual_machine" "example" {
     caching              = "ReadWrite"
   }
 }
+data "template_file" "nginx-vm-cloud-init" {
+  template = file("install-apache.sh")
+}
+

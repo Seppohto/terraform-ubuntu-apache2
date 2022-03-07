@@ -5,7 +5,7 @@ variable "admin_password" {}
 
 
 variable "resource_group_name" {
-  default = "OllintoinenTFResourceGroup"
+  default = "OllinTFResourceGroup"
 }
 variable "storage_account_name" {
   default = "ollinexamplesorage01"
@@ -21,3 +21,4 @@ variable "network-vnet-cidr" {
 variable "network-subnet-cidr" {
   default = "10.0.2.0/24"
   }
+
